@@ -1,0 +1,105 @@
+# -----------------------------------------------------------------------------
+# Author: Melissa Murgittroyd
+# Date: June 12th, 2023
+# File name: Murgittroyd_StreamBuffer_4Clips.py
+# Purpose: Final Project, Using Python to Generate Stream Buffers for the Cannonsville Reservoir Watersheds, NY
+# this script clips 13 watersheds from region of interest into a shapefile,
+# then clips the flowlines, water bodies, and buffer to the clipped watershed shapefile
+
+# contact: murgittm@oregonstate.edu
+
+# TASKS PRIOR TO RUNNING SCRIPT:
+# ensure system interpreter is setup python.exe,
+# close ArcPro to run the script
+# ensure file pathways are correct and set up
+# -----------------------------------------------------------------------------
+#######################################################################################
+# Step 1: install necessary packages
+import arcpy
+from arcpy import env
+
+# Step 2:
+# Set the workspace and environment settings
+env.workspace = r"C:\Users\melis\Desktop\GIS3\Murgittroyd_Final_Project_Final\NHD_H_02040101_HU8_Shape\Shape"
+env.overwriteOutput = True
+
+# Step 3:
+# Set the input and output file paths
+watershed_shapefile = r"C:\Users\melis\Desktop\GIS3\Murgittroyd_Final_Project_Final\NHD_H_02040101_HU8_Shape\Shape\WBDHU12.shp"
+output_folder = r"C:\Users\melis\Desktop\GIS3\Murgittroyd_Final_Project_Final\NHD_H_02040101_HU8_Shape\Shape"
+output_shapefile = r"C:\Users\melis\Desktop\GIS3\Murgittroyd_Final_Project_Final\NHD_H_02040101_HU8_Shape\Shape\ClippedWatersheds.shp"
+
+# Step 4:
+# List of watershed names to clip for region of interest, Cannonsville Reservoir Watersheds
+watershed_names = ["Town Brook-West Branch Delaware River", "Betty Brook-West Branch Delaware River",
+                   "Rose Brook-West Branch Delaware River", "Kidd Brook-West Branch Delaware River",
+                   "Little Delaware River", "Elk Brook-West Branch Delaware River",
+                   "Platner Brook-West Branch Delaware River", "Bagley Brook-West Branch Delaware River",
+                   "East Brook", "Mallory Brook-West Branch Delaware River",
+                   "Beers Brook-West Branch Delaware River", "Trout Creek",
+                   "Cannonsville Reservoir-West Branch Delaware River"]
+
+# Step 5:
+# Create a feature class to hold the clipped watersheds by creating new polygon shapefile
+arcpy.CreateFeatureclass_management(output_folder, "ClippedWatersheds.shp", "POLYGON",
+                                    spatial_reference=watershed_shapefile)
+# stored as polygon, spatial reference is the watershed SHP
+
+# Step 6:
+# Iterate through the watershed names and clip the corresponding features
+for watershed_name in watershed_names:  # open FOR loop to iterate over watershed names in attribute table
+    # Perform the clip analysis
+    arcpy.Select_analysis(watershed_shapefile, "in_memory\\temp", "name = '{}'".format(watershed_name))
+    # SQL query where name should be watershed name
+    arcpy.Append_management("in_memory\\temp", output_shapefile, "NO_TEST")
+# appends found and selected features to the output shapefile
+# NO TEST aka do not perform other tests while this is happening
+#
+print("Clipping completed. Clipped watersheds saved to: {}".format(output_shapefile))
+
+# Step 7:
+# CLIP the flowlines shapefile to the extent of the clipped watersheds shapefile that was just generated
+# Set the input and output file paths
+flowlines_shapefile = r"C:\Users\melis\Desktop\GIS3\Murgittroyd_Final_Project_Final\NHD_H_02040101_HU8_Shape\Shape\NHDFlowline.shp"
+watershed_clip_extent_shapefile = r"C:\Users\melis\Desktop\GIS3\Murgittroyd_Final_Project_Final\NHD_H_02040101_HU8_Shape\Shape\ClippedWatersheds.shp"
+flowlines_clip_output_shapefile = r"C:\Users\melis\Desktop\GIS3\Murgittroyd_Final_Project_Final\NHD_H_02040101_HU8_Shape\Shape\Flowlines_Clip.shp"
+
+# Step 8:
+# Get the extent of the extent shapefile
+desc = arcpy.Describe(watershed_clip_extent_shapefile)
+extent = desc.extent
+extent_polygon = arcpy.Polygon(arcpy.Array([extent.lowerLeft, extent.lowerRight, extent.upperRight, extent.upperLeft]))
+# gets the extent of the shapefile of interest, creates polygon geometry to rep extent 
+# polygon used for clipping operations later on 
+
+# Step 9:
+# Perform the clip analysis
+arcpy.Clip_analysis(flowlines_shapefile, extent_polygon, flowlines_clip_output_shapefile)
+print("Flowlines clipped to the extent of the clipped watersheds shapefile.")
+
+# Set the input and output file paths for NHDWaterbody.shp clip analysis
+waterbody_shapefile = r"C:\Users\melis\Desktop\GIS3\Murgittroyd_Final_Project_Final\NHD_H_02040101_HU8_Shape\Shape\NHDWaterbody.shp"
+waterbody_clip_output_shapefile = r"C:\Users\melis\Desktop\GIS3\Murgittroyd_Final_Project_Final\NHD_H_02040101_HU8_Shape\Shape\Waterbody_Clip.shp"
+
+# Perform the clip analysis
+arcpy.Clip_analysis(waterbody_shapefile, extent_polygon, waterbody_clip_output_shapefile)
+print("Waterbodies clipped to the extent of the clipped watersheds shapefile.")
+
+# Step 10:
+# STREAM BUFFER ANALYSIS, tested with 10m first, then 20m plus CLIP, then 30m plus CLIP, then 25m plus clips
+# Set the input and output file paths for stream buffer analysis
+flowlines_shapefile = r"C:\Users\melis\Desktop\GIS3\Murgittroyd_Final_Project_Final\NHD_H_02040101_HU8_Shape\Shape\NHDFlowline.shp"
+stream_buffer_output_25m = r"C:\Users\melis\Desktop\GIS3\Murgittroyd_Final_Project_Final\buffer_output_25m.shp"
+# Set the buffer distance
+buffer_distance = "25 Meters"
+# Generate the stream buffers
+arcpy.Buffer_analysis(flowlines_shapefile, stream_buffer_output_25m, buffer_distance, "FULL", "ROUND", "ALL")
+# CLIP stream buffers to extent of the 13 clipped watersheds
+clipped_watersheds_shapefile = r"C:\Users\melis\Desktop\GIS3\Murgittroyd_Final_Project_Final\NHD_H_02040101_HU8_Shape\Shape\ClippedWatersheds.shp"
+stream_buffer_output_shapefile = r"C:\Users\melis\Desktop\GIS3\Murgittroyd_Final_Project_Final\NHD_H_02040101_HU8_Shape\Shape\ClippedBuffer"
+arcpy.Clip_analysis(stream_buffer_output_25m, clipped_watersheds_shapefile, stream_buffer_output_shapefile)
+# Print statement
+print("The script has run its course. Please refresh the file pathways in ArcPro or restart ArcPro to "
+      "view the specified/generated stream buffer shapefile by adding it to the map output in ArcPro!")
+
+# tested script with a variety of buffer widths, all generated output shapefiles with buffer widths
